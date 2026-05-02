@@ -1,10 +1,15 @@
-FROM python:3.11-slim
+FROM python:3.8-slim
+
 WORKDIR /app
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app/ ./app/
-RUN chown -R appuser:appgroup /app
-USER appuser
+COPY . .
+
+# VULN: credentials hardcoded in image
+ENV SMTP_PASSWORD=SmtpP@ss_Hardcoded!
+ENV SMTP_API_KEY=SG.hardcoded_sendgrid_api_key_xyz
+ENV RABBITMQ_PASS=admin123
+ENV FTP_PASS=ftp_pass_123
+
+RUN pip install -r requirements.txt
+
 EXPOSE 8005
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8005"]
+CMD ["python", "app.py"]

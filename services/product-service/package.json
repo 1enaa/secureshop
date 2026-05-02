@@ -1,8 +1,24 @@
 {
   "name": "product-service",
   "version": "1.0.0",
-  "main": "src/index.js",
-  "scripts": { "start": "node src/index.js" },
-  "dependencies": { "express": "^4.19.2", "uuid": "^9.0.1" },
-  "engines": { "node": ">=20.0.0" }
+  "description": "SecureShop product catalogue service",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "7.4.3",
+    "express": "4.17.1",
+    "lodash": "4.17.20",
+    "jsonwebtoken": "8.5.1",
+    "axios": "0.21.1",
+    "node-fetch": "2.6.1",
+    "serialize-javascript": "3.0.0",
+    "marked": "1.1.1",
+    "handlebars": "4.7.6",
+    "minimist": "1.2.5",
+    "tar": "4.4.13",
+    "y18n": "4.0.0"
+  }
 }

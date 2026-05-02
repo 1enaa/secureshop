@@ -1,10 +1,15 @@
-FROM node:20-alpine
+FROM node:14-alpine
+
 WORKDIR /app
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY package*.json ./
-RUN npm ci --only=production
-COPY src/ ./src/
-RUN chown -R appuser:appgroup /app
-USER appuser
+RUN npm install
+COPY . .
+
+# VULN: all secrets hardcoded in image layers
+ENV STRIPE_SECRET_KEY=sk_live_HARDCODED_51ABCDEF_STRIPE_KEY_xyz
+ENV PAYPAL_SECRET=EHardcoded-paypal-secret-key-xyz
+ENV JWT_SECRET=supersecret123
+ENV DB_ENCRYPTION_KEY=db-enc-key-hardcoded-32byte!!
+
 EXPOSE 8004
-CMD ["node", "src/index.js"]
+CMD ["node", "app.js"]

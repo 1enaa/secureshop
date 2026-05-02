@@ -1,10 +1,14 @@
-FROM python:3.11-slim
+FROM python:3.8-slim
+
 WORKDIR /app
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY app/ ./app/
-RUN chown -R appuser:appgroup /app
-USER appuser
+COPY . .
+
+# VULN: secrets in ENV
+ENV API_KEY=inventory-api-key-hardcoded
+ENV ADMIN_TOKEN=admin-token-9876
+ENV DB_PASS=inv_db_pass_123
+
+RUN pip install -r requirements.txt
+
 EXPOSE 8006
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8006"]
+CMD ["python", "app.py"]

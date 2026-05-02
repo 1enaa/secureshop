@@ -1,4 +1,6 @@
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-pydantic==2.7.1
-httpx==0.27.0
+Flask==2.0.1
+PyJWT==1.7.1
+PyYAML==5.3.1
+requests==2.25.1
+Jinja2==2.11.3
+Werkzeug==1.0.1

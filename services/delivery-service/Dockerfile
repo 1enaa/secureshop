@@ -1,10 +1,15 @@
-FROM node:20-alpine
+FROM node:14-alpine
+
 WORKDIR /app
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY package*.json ./
-RUN npm ci --only=production
-COPY src/ ./src/
-RUN chown -R appuser:appgroup /app
-USER appuser
+RUN npm install
+COPY . .
+
+# VULN: all courier keys in image
+ENV DHL_API_KEY=dhl-api-key-hardcoded-XYZ123
+ENV FEDEX_API_KEY=fedex-secret-key-hardcoded-ABCDEF
+ENV UPS_API_KEY=ups-api-key-hardcoded-UVWXYZ
+ENV JWT_SECRET=supersecret123
+
 EXPOSE 8007
-CMD ["node", "src/index.js"]
+CMD ["node", "app.js"]

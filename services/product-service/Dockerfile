@@ -1,10 +1,17 @@
-FROM node:20-alpine
+# VULN: outdated Node.js base image
+FROM node:14-alpine
+
 WORKDIR /app
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 COPY package*.json ./
-RUN npm ci --only=production
-COPY src/ ./src/
-RUN chown -R appuser:appgroup /app
-USER appuser
+# VULN: npm install without lockfile enforcement
+RUN npm install
+COPY . .
+
+# VULN: hardcoded secrets in ENV
+ENV API_KEY=prod-api-key-hardcoded-abc
+ENV JWT_SECRET=supersecret123
+ENV STRIPE_SECRET=sk_live_HARDCODED_STRIPE_KEY_XYZ
+ENV NODE_ENV=development
+
 EXPOSE 8002
-CMD ["node", "src/index.js"]
+CMD ["node", "app.js"]

@@ -1,4 +1,4 @@
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-pydantic==2.7.1
-aio-pika==9.4.1
+Flask==2.0.1
+pika==1.1.0
+requests==2.25.1
+Werkzeug==1.0.1

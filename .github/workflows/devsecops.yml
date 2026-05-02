@@ -6,105 +6,126 @@ on:
   pull_request:
     branches: [main]
 
+# 🔐 GLOBAL PERMISSIONS
 permissions:
   contents: read
-  security-events: write     # SARIF uploads → GitHub Security tab
+  security-events: write
 
 jobs:
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 1 — SAST                                      ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 1 — SAST                              ║
+  # ╚══════════════════════════════════════════════╝
   sast:
     name: "SAST"
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
       - uses: actions/checkout@v4
 
-      # Bandit — Python services
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Bandit (Python)
         run: |
           pip install bandit
+          mkdir -p security/reports
           bandit -r services/user-service services/order-service \
                     services/inventory-service services/notification-service \
             -f json -o security/reports/bandit-report.json --exit-zero
+
       - uses: actions/upload-artifact@v4
         with:
           name: bandit-report
           path: security/reports/bandit-report.json
 
-      # Semgrep — Node.js services
       - name: Semgrep (Node.js)
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/javascript p/nodejs p/owasp-top-ten"
           generateSarif: "1"
         continue-on-error: true
-      - uses: github/codeql-action/upload-sarif@v3
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
         with:
           sarif_file: semgrep.sarif
           category: semgrep
-        if: always()
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 2 — SCA                                       ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 2 — SCA                               ║
+  # ╚══════════════════════════════════════════════╝
   sca:
     name: "SCA"
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Trivy filesystem
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
           scan-ref: "."
-          ignorefile: security/sca/.trivyignore
           format: sarif
           output: security/reports/trivy-sca.sarif
           severity: HIGH,CRITICAL
-      - uses: github/codeql-action/upload-sarif@v3
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
         with:
           sarif_file: security/reports/trivy-sca.sarif
           category: trivy-sca
-        if: always()
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 3 — SECRETS DETECTION                         ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 3 — SECRETS DETECTION                 ║
+  # ╚══════════════════════════════════════════════╝
   secrets:
     name: "Secrets Detection"
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0       # full git history
+          fetch-depth: 0
+
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 4 — BUILD                                     ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 4 — BUILD                             ║
+  # ╚══════════════════════════════════════════════╝
   build:
     name: "Build All Images"
     runs-on: ubuntu-latest
     needs: [sast, sca, secrets]
+
     steps:
       - uses: actions/checkout@v4
-      - name: Build
-        run: docker compose build
+      - run: docker compose build
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 5 — CONTAINER SCANNING                        ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 5 — CONTAINER SCAN                    ║
+  # ╚══════════════════════════════════════════════╝
   container-scan:
-    name: "Container Scan — ${{ matrix.service }}"
+    name: "Container Scan"
     runs-on: ubuntu-latest
     needs: build
+
+    permissions:
+      contents: read
+      security-events: write
+
     strategy:
       matrix:
         service:
@@ -115,10 +136,13 @@ jobs:
           - notification-service
           - inventory-service
           - delivery-service
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Build image
         run: docker build -t secureshop/${{ matrix.service }}:ci ./services/${{ matrix.service }}
+
       - name: Trivy image scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -126,20 +150,27 @@ jobs:
           format: sarif
           output: trivy-${{ matrix.service }}.sarif
           severity: HIGH,CRITICAL
-      - uses: github/codeql-action/upload-sarif@v3
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
-          category: trivy-image-${{ matrix.service }}
-        if: always()
+          category: trivy-${{ matrix.service }}
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 6 — IaC SCANNING                              ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 6 — IaC SCAN                         ║
+  # ╚══════════════════════════════════════════════╝
   iac:
     name: "IaC Scan (Checkov)"
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      security-events: write
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: bridgecrewio/checkov-action@master
         with:
           directory: .
@@ -147,44 +178,43 @@ jobs:
           output_format: sarif
           output_file_path: security/reports/checkov.sarif
         continue-on-error: true
-      - uses: github/codeql-action/upload-sarif@v3
+
+      - uses: github/codeql-action/upload-sarif@v4
+        if: always()
         with:
           sarif_file: security/reports/checkov.sarif
           category: checkov
-        if: always()
 
-  # ╔══════════════════════════════════════════════════════╗
-  # ║  STAGE 7 — DAST                                      ║
-  # ╚══════════════════════════════════════════════════════╝
+  # ╔══════════════════════════════════════════════╗
+  # ║  STAGE 7 — DAST                              ║
+  # ╚══════════════════════════════════════════════╝
   dast:
     name: "DAST (OWASP ZAP)"
     runs-on: ubuntu-latest
     needs: build
+
     steps:
       - uses: actions/checkout@v4
-      - name: Prepare environment
-        run: |
-          cp .env.example .env
-          echo "JWT_SECRET=ci-test-secret-not-for-production-use" >> .env
-          echo "RABBITMQ_USER=guest" >> .env
-          echo "RABBITMQ_PASS=guest" >> .env
-      - name: Start all services
+
+      - name: Start services
         run: |
           docker compose up -d
           sleep 35
-          curl -f http://localhost/health || (docker compose logs && exit 1)
-      - name: OWASP ZAP Baseline Scan
+          curl -f http://localhost/health
+
+      - name: OWASP ZAP Scan
         uses: zaproxy/action-baseline@v0.12.0
         with:
           target: "http://localhost"
-          rules_file_name: ".zap/rules.tsv"
           cmd_options: "-a -j"
         continue-on-error: true
+
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: zap-report
           path: report_html.html
-      - name: Tear down
+
+      - name: Shutdown
         if: always()
         run: docker compose down -v

@@ -1,0 +1,42 @@
+name: Bandit SAST (Python)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  bandit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: |
+          bandit -r services/user-service \
+                 services/order-service \
+                 services/inventory-service \
+                 services/notification-service \
+                 -f json -o bandit.json
+
+      - name: Convert to SARIF (simple script)
+        run: |
+          python scripts/bandit_to_sarif.py
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: security/reports/bandit.sarif

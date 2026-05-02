@@ -42,13 +42,19 @@ jobs:
         run: |
           bandit -r services -f json -o bandit.json || true
 
+      - name: Upload Bandit JSON artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-results
+          path: bandit.json
+
   trivy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Run Trivy FS scan
-        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1  # v0.35.0 (clean SHA)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           scan-type: fs
           format: sarif
@@ -58,3 +64,31 @@ jobs:
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy.sarif
+
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run OWASP Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        id: Depcheck
+        with:
+          project: 'SecureShop'
+          path: '.'
+          format: 'SARIF'
+          out: 'reports'
+          args: >
+            --failOnCVSS 7
+            --enableRetired
+
+      - name: Upload SARIF report to GitHub
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: reports/dependency-check-report.sarif
+
+      - name: Upload HTML report as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: ${{github.workspace}}/reports

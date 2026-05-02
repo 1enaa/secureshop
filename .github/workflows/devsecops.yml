@@ -13,9 +13,9 @@ permissions:
 
 jobs:
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 1 — SAST                              ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 1 — SAST
+  # ─────────────────────────────────────────────
   sast:
     name: "SAST"
     runs-on: ubuntu-latest
@@ -27,12 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Bandit (Python) ─────────────────────────
+      # Bandit (Python)
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Bandit Scan
+      - name: Run Bandit
         run: |
           pip install bandit
           mkdir -p security/reports
@@ -45,8 +45,8 @@ jobs:
           name: bandit-report
           path: security/reports/bandit-report.json
 
-      # ── Semgrep (Node.js / Multi-language) ─────
-      - name: Semgrep Scan
+      # Semgrep (Node.js + OWASP rules)
+      - name: Run Semgrep
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/javascript p/nodejs p/owasp-top-ten"
@@ -60,9 +60,9 @@ jobs:
           category: semgrep
         if: always()
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 2 — SCA (Trivy)                       ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 2 — SCA (Trivy)
+  # ─────────────────────────────────────────────
   sca:
     name: "SCA"
     runs-on: ubuntu-latest
@@ -90,9 +90,9 @@ jobs:
           category: trivy-sca
         if: always()
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 3 — SECRETS                           ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 3 — SECRETS
+  # ─────────────────────────────────────────────
   secrets:
     name: "Secrets Detection"
     runs-on: ubuntu-latest
@@ -102,14 +102,14 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Gitleaks Scan
+      - name: Run Gitleaks
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 4 — BUILD                             ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 4 — BUILD
+  # ─────────────────────────────────────────────
   build:
     name: "Build Images"
     runs-on: ubuntu-latest
@@ -121,9 +121,9 @@ jobs:
       - name: Docker Compose Build
         run: docker compose build
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 5 — CONTAINER SCAN                    ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 5 — CONTAINER SCAN
+  # ─────────────────────────────────────────────
   container-scan:
     name: "Container Scan — ${{ matrix.service }}"
     runs-on: ubuntu-latest
@@ -161,9 +161,9 @@ jobs:
           category: trivy-${{ matrix.service }}
         if: always()
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 6 — IaC SCAN                          ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 6 — IaC SCAN
+  # ─────────────────────────────────────────────
   iac:
     name: "IaC Scan (Checkov)"
     runs-on: ubuntu-latest
@@ -175,7 +175,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Checkov Scan
+      - name: Run Checkov
         uses: bridgecrewio/checkov-action@master
         with:
           directory: .
@@ -191,9 +191,9 @@ jobs:
           category: checkov
         if: always()
 
-  # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 7 — DAST                              ║
-  # ╚══════════════════════════════════════════════╝
+  # ─────────────────────────────────────────────
+  #  STAGE 7 — DAST
+  # ─────────────────────────────────────────────
   dast:
     name: "DAST (OWASP ZAP)"
     runs-on: ubuntu-latest
@@ -202,7 +202,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare environment
+      - name: Prepare Environment
         run: |
           cp .env.example .env || true
           echo "JWT_SECRET=ci-secret" >> .env
@@ -222,6 +222,6 @@ jobs:
           cmd_options: "-a -j"
         continue-on-error: true
 
-      - name: Stop Containers
+      - name: Stop Services
         if: always()
         run: docker compose down -v

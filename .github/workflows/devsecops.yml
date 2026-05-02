@@ -6,10 +6,10 @@ on:
   pull_request:
     branches: [main]
 
-# 🔐 GLOBAL PERMISSIONS
 permissions:
   contents: read
   security-events: write
+  actions: read
 
 jobs:
 
@@ -27,38 +27,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # ── Bandit (Python) ─────────────────────────
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Bandit (Python)
+      - name: Bandit Scan
         run: |
           pip install bandit
           mkdir -p security/reports
           bandit -r services/user-service services/order-service \
-                    services/inventory-service services/notification-service \
-            -f json -o security/reports/bandit-report.json --exit-zero
+                 services/inventory-service services/notification-service \
+                 -f json -o security/reports/bandit-report.json --exit-zero
 
       - uses: actions/upload-artifact@v4
         with:
           name: bandit-report
           path: security/reports/bandit-report.json
 
-      - name: Semgrep (Node.js)
+      # ── Semgrep (Node.js / Multi-language) ─────
+      - name: Semgrep Scan
         uses: returntocorp/semgrep-action@v1
         with:
           config: "p/javascript p/nodejs p/owasp-top-ten"
           generateSarif: "1"
         continue-on-error: true
 
-      - uses: github/codeql-action/upload-sarif@v4
-        if: always()
+      - name: Upload Semgrep SARIF
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: semgrep.sarif
           category: semgrep
+        if: always()
 
   # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 2 — SCA                               ║
+  # ║  STAGE 2 — SCA (Trivy)                       ║
   # ╚══════════════════════════════════════════════╝
   sca:
     name: "SCA"
@@ -71,7 +74,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Trivy filesystem
+      - name: Trivy FS Scan
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: fs
@@ -80,14 +83,15 @@ jobs:
           output: security/reports/trivy-sca.sarif
           severity: HIGH,CRITICAL
 
-      - uses: github/codeql-action/upload-sarif@v4
-        if: always()
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: security/reports/trivy-sca.sarif
           category: trivy-sca
+        if: always()
 
   # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 3 — SECRETS DETECTION                 ║
+  # ║  STAGE 3 — SECRETS                           ║
   # ╚══════════════════════════════════════════════╝
   secrets:
     name: "Secrets Detection"
@@ -98,7 +102,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: gitleaks/gitleaks-action@v2
+      - name: Gitleaks Scan
+        uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -106,25 +111,23 @@ jobs:
   # ║  STAGE 4 — BUILD                             ║
   # ╚══════════════════════════════════════════════╝
   build:
-    name: "Build All Images"
+    name: "Build Images"
     runs-on: ubuntu-latest
     needs: [sast, sca, secrets]
 
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose build
+
+      - name: Docker Compose Build
+        run: docker compose build
 
   # ╔══════════════════════════════════════════════╗
   # ║  STAGE 5 — CONTAINER SCAN                    ║
   # ╚══════════════════════════════════════════════╝
   container-scan:
-    name: "Container Scan"
+    name: "Container Scan — ${{ matrix.service }}"
     runs-on: ubuntu-latest
     needs: build
-
-    permissions:
-      contents: read
-      security-events: write
 
     strategy:
       matrix:
@@ -140,10 +143,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build image
+      - name: Build Image
         run: docker build -t secureshop/${{ matrix.service }}:ci ./services/${{ matrix.service }}
 
-      - name: Trivy image scan
+      - name: Trivy Image Scan
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: secureshop/${{ matrix.service }}:ci
@@ -151,14 +154,15 @@ jobs:
           output: trivy-${{ matrix.service }}.sarif
           severity: HIGH,CRITICAL
 
-      - uses: github/codeql-action/upload-sarif@v4
-        if: always()
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-${{ matrix.service }}.sarif
           category: trivy-${{ matrix.service }}
+        if: always()
 
   # ╔══════════════════════════════════════════════╗
-  # ║  STAGE 6 — IaC SCAN                         ║
+  # ║  STAGE 6 — IaC SCAN                          ║
   # ╚══════════════════════════════════════════════╝
   iac:
     name: "IaC Scan (Checkov)"
@@ -171,7 +175,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: bridgecrewio/checkov-action@master
+      - name: Checkov Scan
+        uses: bridgecrewio/checkov-action@master
         with:
           directory: .
           framework: dockerfile,docker_compose
@@ -179,11 +184,12 @@ jobs:
           output_file_path: security/reports/checkov.sarif
         continue-on-error: true
 
-      - uses: github/codeql-action/upload-sarif@v4
-        if: always()
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: security/reports/checkov.sarif
           category: checkov
+        if: always()
 
   # ╔══════════════════════════════════════════════╗
   # ║  STAGE 7 — DAST                              ║
@@ -196,10 +202,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Start services
+      - name: Prepare environment
+        run: |
+          cp .env.example .env || true
+          echo "JWT_SECRET=ci-secret" >> .env
+          echo "RABBITMQ_USER=guest" >> .env
+          echo "RABBITMQ_PASS=guest" >> .env
+
+      - name: Start Services
         run: |
           docker compose up -d
-          sleep 35
+          sleep 40
           curl -f http://localhost/health
 
       - name: OWASP ZAP Scan
@@ -209,12 +222,6 @@ jobs:
           cmd_options: "-a -j"
         continue-on-error: true
 
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: zap-report
-          path: report_html.html
-
-      - name: Shutdown
+      - name: Stop Containers
         if: always()
         run: docker compose down -v

@@ -1,0 +1,24 @@
+# Secrets — never commit
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/ venv/ env/
+.pytest_cache/ .mypy_cache/ .ruff_cache/
+htmlcov/ .coverage coverage.xml
+
+# Node.js
+node_modules/
+npm-debug.log* yarn-error.log*
+
+# Security scan outputs (stored as CI artifacts, not source)
+security/reports/*.json
+security/reports/*.sarif
+security/reports/*.html
+security/reports/*.xml
+
+# IDE
+.vscode/ .idea/ .DS_Store *.swp

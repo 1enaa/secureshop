@@ -1,0 +1,14 @@
+[bandit]
+# Targets: all Python services
+targets = [
+    "services/user-service",
+    "services/order-service",
+    "services/inventory-service",
+    "services/notification-service",
+]
+recursive = true
+severity  = "medium"   # report medium, high, critical
+confidence= "medium"
+
+# Skip test files
+exclude_dirs = ["tests", ".venv", "venv"]

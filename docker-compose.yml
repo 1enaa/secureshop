@@ -1,0 +1,140 @@
+
+
+networks:
+  secureshop-net:
+    driver: bridge
+
+volumes:
+  rabbitmq_data:
+
+services:
+
+  # ── API Gateway ──────────────────────────────────────────────────────────────
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "80:80"
+    depends_on:
+      - user-service
+      - product-service
+      - order-service
+      - payment-service
+      - notification-service
+      - inventory-service
+      - delivery-service
+    networks: [secureshop-net]
+    restart: unless-stopped
+
+  # ── User Service  (Python) ───────────────────────────────────────────────────
+  user-service:
+    build: ./services/user-service
+    expose: ["8001"]
+    environment:
+      JWT_SECRET: ${JWT_SECRET}
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request;urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Product Service  (Node.js) ───────────────────────────────────────────────
+  product-service:
+    build: ./services/product-service
+    expose: ["8002"]
+    environment:
+      PORT: 8002
+      NODE_ENV: production
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","node","-e","require('http').get('http://localhost:8002/health',r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Order Service  (Python) ──────────────────────────────────────────────────
+  order-service:
+    build: ./services/order-service
+    expose: ["8003"]
+    environment:
+      PAYMENT_SERVICE_URL: http://payment-service:8004
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request;urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Payment Service  (Node.js) ───────────────────────────────────────────────
+  payment-service:
+    build: ./services/payment-service
+    expose: ["8004"]
+    environment:
+      PORT: 8004
+      NODE_ENV: production
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","node","-e","require('http').get('http://localhost:8004/health',r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Notification Service  (Python) ───────────────────────────────────────────
+  notification-service:
+    build: ./services/notification-service
+    expose: ["8005"]
+    environment:
+      RABBITMQ_URL: amqp://${RABBITMQ_USER}:${RABBITMQ_PASS}@rabbitmq:5672
+    depends_on: [rabbitmq]
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request;urllib.request.urlopen('http://localhost:8005/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Inventory Service  (Python) ──────────────────────────────────────────────
+  inventory-service:
+    build: ./services/inventory-service
+    expose: ["8006"]
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","python","-c","import urllib.request;urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Delivery Service  (Node.js) ──────────────────────────────────────────────
+  delivery-service:
+    build: ./services/delivery-service
+    expose: ["8007"]
+    environment:
+      PORT: 8007
+      NODE_ENV: production
+    networks: [secureshop-net]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD","node","-e","require('http').get('http://localhost:8007/health',r=>process.exit(r.statusCode===200?0:1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── RabbitMQ ─────────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    expose: ["5672"]
+    ports:
+      - "15672:15672"      # management UI – dev only
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks: [secureshop-net]
+    restart: unless-stopped
